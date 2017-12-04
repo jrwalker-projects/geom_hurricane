@@ -1,0 +1,117 @@
+---
+title: "Data Prep - Building Data Visualization Tools"
+author: "John Walker"
+date: "November 15, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libs}
+library(utils); library(tidyverse); library(lubridate); library(ggmap); library(geosphere)
+```
+
+```{r readin}
+ext_tracks_widths <- c(7, 10, 2, 2, 3, 5, 5, 6, 4, 5, 4, 4, 5, 3, 4, 3, 3, 3,
+                       4, 3, 3, 3, 4, 3, 3, 3, 2, 6, 1)
+ext_tracks_colnames <- c("storm_id", "storm_name", "month", "day",
+                          "hour", "year", "latitude", "longitude",
+                          "max_wind", "min_pressure", "rad_max_wind",
+                          "eye_diameter", "pressure_1", "pressure_2",
+                          paste("radius_34", c("ne", "se", "sw", "nw"), sep = "_"),
+                          paste("radius_50", c("ne", "se", "sw", "nw"), sep = "_"),
+                          paste("radius_64", c("ne", "se", "sw", "nw"), sep = "_"),
+                          "storm_type", "distance_to_land", "final")
+
+ext_tracks <- read_fwf("ebtrk_atlc_1988_2015.txt", 
+                       fwf_widths(ext_tracks_widths, ext_tracks_colnames),
+                       na = "-99")
+length(ext_tracks)
+```
+```{r cleanup}
+cl_tracks <- ext_tracks %>%
+  filter(is.numeric(longitude),
+         is.numeric(latitude)) %>%
+  mutate(storm_id = paste0(storm_name, "-", year),
+         longitude = if_else((longitude < 180), (longitude * -1), longitude),
+         date = ymd_h(paste(year, month, day, hour, sep="-"))) %>%
+  select(-month, -day, -hour, -year, -final)
+cl_34 <- cl_tracks %>%
+  select(storm_id, date, latitude, longitude, storm_name,
+         #max_wind, min_pressure, rad_max_wind, eye_diameter, pressure_1,
+         radius_34_ne, radius_34_nw, radius_34_se, radius_34_sw,
+         storm_type, distance_to_land) %>%
+  rename(ne = radius_34_ne, nw = radius_34_nw, se = radius_34_se, sw = radius_34_sw) %>% 
+  mutate(wind_speed = 34)
+cl_50 <- cl_tracks %>%
+  select(storm_id, date, latitude, longitude, storm_name,
+         #max_wind, min_pressure, rad_max_wind, eye_diameter, pressure_1,
+         radius_50_ne, radius_50_nw, radius_50_se, radius_50_sw,
+         storm_type, distance_to_land) %>%
+  rename(ne = radius_50_ne, nw = radius_50_nw, se = radius_50_se, sw = radius_50_sw) %>% 
+  mutate(wind_speed = 50)
+cl_64 <- cl_tracks %>%
+  select(storm_id, date, latitude, longitude, storm_name,
+         #max_wind, min_pressure, rad_max_wind, eye_diameter, pressure_1,
+         radius_64_ne, radius_64_nw, radius_64_se, radius_64_sw,
+         storm_type, distance_to_land) %>%
+  rename(ne = radius_64_ne, nw = radius_64_nw, se = radius_64_se, sw = radius_64_sw) %>% 
+  mutate(wind_speed = 64)
+lg_tracks <- rbind(cl_34, cl_50, cl_64) #full table long format
+rm(list=c('cl_34','cl_50','cl_64'))
+```
+
+```{r specific}
+#get specific points (3 rows) for Ike and Katrina
+Ike <- lg_tracks %>%
+  filter(storm_name == "IKE",
+         distance_to_land == 42,
+         longitude < -90) %>%
+  select(storm_id, date, latitude, longitude, wind_speed, ne, nw, se, sw) %>%
+  mutate(wind_speed = as.factor(wind_speed))
+Katrina <- lg_tracks %>%
+  filter(storm_name == "KATRINA",
+         distance_to_land == -4) %>%
+  select(storm_id, date, latitude, longitude, wind_speed, ne, nw, se, sw) %>%
+  mutate(wind_speed = as.factor(wind_speed))
+```
+
+```{r ikepath, eval=FALSE}
+houston<- get_map("Houston, TX", zoom = 5)
+neworleans<- get_map("New Orleans, LA", zoom = 5)
+```
+
+```{r savemaps, eval=FALSE}
+saveRDS(houston, "houston.rds")
+saveRDS(neworleans, "neworleans.rds")
+```
+```{r readmaps}
+houston <- readRDS("houston.rds")
+neworleans <- readRDS("neworleans.rds")
+```
+```{r mapike}
+ikepath <- cl_tracks %>%
+  filter(storm_name == "IKE")
+ggmap(neworleans) + 
+  geom_path(data = ikepath, aes(x = longitude, y = latitude),
+            color = "gray", size = 1.1) + 
+  geom_point(data = ikepath,
+             aes(x = longitude, y = latitude, color = min_pressure, 
+             size = max_wind))
+#needs to vary point and make better use of color
+```
+```{r i1}
+ike1 <- slice(Ike, 1)
+ike2 <- slice(Ike, 2)
+ike3 <- slice(Ike, 3)
+```
+
+```{r saveike}
+saveRDS(Ike, "ike.rds")
+```
+
+```{r getike}
+Ike <- readRDS("ike.rds")
+```
