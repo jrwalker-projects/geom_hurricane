@@ -1,0 +1,182 @@
+---
+title: "new geom workspace"
+author: "John Walker"
+date: "November 16, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r trial1}
+#try destPoint
+nm_to_meters <- 1852
+cntr_row <- data.frame(lon=-94.6, lat=29.1)
+I34ne <- data.frame(destPoint(c(-94.6, 29.1), 0:90, (225*nm_to_meters))) %>%
+  rbind(cntr_row) %>%
+  mutate(wind_speed = factor(34))
+I34se <- data.frame(destPoint(c(-94.6, 29.1), 90:180, (200*nm_to_meters))) %>%
+  rbind(cntr_row) %>%
+  mutate(wind_speed = factor(34))
+I34nw <- data.frame(destPoint(c(-94.6, 29.1), 270:360, (125*nm_to_meters))) %>%
+  rbind(cntr_row) %>%
+  mutate(wind_speed = factor(34))
+I34sw <- data.frame(destPoint(c(-94.6, 29.1), 180:270, (125*nm_to_meters))) %>%
+  rbind(cntr_row) %>%
+  mutate(wind_speed = factor(34))
+
+I34 <- I34ne %>% 
+  rbind(I34se, I34nw, I34sw) %>%
+  mutate(wind_speed = factor(34))
+
+ggmap(neworleans) +
+  geom_polygon(data=I34, aes(x=lon, y=lat, color=wind_speed, fill=wind_speed)) +
+    scale_color_manual(name = "Wind speed (kts)",
+                     values = c("red", "orange", "yellow")) +
+    scale_fill_manual(name = "Wind speed (kts)",
+                    values = c("red", "orange", "yellow"))
+
+```
+
+```{r transmute}
+nm_to_meters <- 1852
+clon <- Ike$longitude[1]
+clat <- Ike$latitude[1]
+cntr_row <- data.frame(lon=clon, lat=clat)
+
+parms <- Ike %>%
+  select(wind_speed, ne, nw, se, sw) %>%
+  gather(direction, radius, -wind_speed) %>%
+  arrange(wind_speed)
+
+new_arc <- function(w_speed, dir, rad){
+  my_arc <- destPoint(c(clon, clat), 
+                                 case_when(
+                                   dir == "ne" ~ 0:90,
+                                   dir == "se" ~ 90:180,
+                                   dir == "sw" ~ 180:270,
+                                   dir == "nw" ~ 270:360
+                                 ), 
+                                 rad*nm_to_meters) %>%
+    rbind(cntr_row) %>%
+    mutate(wind_speed = w_speed)
+  return(my_arc)
+}
+
+#xx <- new_arc(parms$wind_speed[1], parms$direction[1], parms$radius[1])
+#yy <- parms %>%
+  
+grid <- pmap(list(parms$wind_speed, parms$direction, parms$radius), new_arc) %>%
+  bind_rows() %>%
+  mutate(wind_speed = factor(wind_speed))
+
+ggmap(neworleans) + 
+  geom_polygon(data = grid, aes(x = lon, y = lat, color=wind_speed, fill=wind_speed)) + 
+  scale_color_manual(name = "Wind speed (kts)", 
+                     values = c("red", "orange", "yellow")) + 
+  scale_fill_manual(name = "Wind speed (kts)", 
+                    values = c("red", "orange", "yellow"))
+
+```
+
+```{r geomhurricane}
+require(ggmap); require(magrittr)
+ggmap(neworleans) + 
+  geom_hurricane(data = Ike, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               colour=wind_speed, fill=wind_speed),
+                 scale_radii = 1) +
+  scale_color_manual(name = "Wind speed (kts)", 
+                     values = c("red", "orange", "yellow")) + 
+  scale_fill_manual(name = "Wind speed (kts)", 
+                    values = c("red", "orange", "yellow"))
+
+```
+```{r lines}
+ike1 <- slice(Ike, 1)
+ike2 <- slice(Ike, 2)
+ike3 <- slice(Ike, 3)
+ggmap(neworleans) + 
+  stat_hurricane(data = ike1, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               colour=as.factor(wind_speed), fill=as.factor(wind_speed))) + 
+  stat_hurricane(data = ike2, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               colour=as.factor(wind_speed), fill=as.factor(wind_speed))) +
+  stat_hurricane(data = ike3, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               colour=as.factor(wind_speed), fill=as.factor(wind_speed))) +
+  scale_color_manual(name = "Wind speed (kts)", 
+                     values = c("red", "orange", "yellow")) + 
+  scale_fill_manual(name = "Wind speed (kts)", 
+                    values = c("red", "orange", "yellow"))
+```
+
+```{r statplot}
+
+ggmap(neworleans) + 
+  stat_hurricane(data = Ike, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               colour=wind_speed, fill=wind_speed),
+                 scale_radii=0.9) + 
+  scale_color_manual(name = "Wind speed (kts)", 
+                     values = c("red", "orange", "yellow")) + 
+  scale_fill_manual(name = "Wind speed (kts)", 
+                    values = c("red", "orange", "yellow"))
+```
+
+```{r st123}
+st123 <- ggmap(neworleans) + 
+  stat_hurricane(data = ike1, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               colour=as.factor(wind_speed), fill=as.factor(wind_speed))) + 
+  stat_hurricane(data = ike2, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               colour=as.factor(wind_speed), fill=as.factor(wind_speed))) +
+  stat_hurricane(data = ike3, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               colour=as.factor(wind_speed), fill=as.factor(wind_speed))) +
+  scale_color_manual(name = "Wind speed (kts)", 
+                     values = c("red", "orange", "yellow")) + 
+  scale_fill_manual(name = "Wind speed (kts)", 
+                    values = c("red", "orange", "yellow"))
+print(st123)
+```
+
+```{r sti}
+sti <- ggmap(neworleans) + 
+  stat_hurricane(data = Ike, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               colour=as.factor(wind_speed), fill=as.factor(wind_speed))) + 
+  scale_color_manual(name = "Wind speed (kts)", 
+                     values = c("red", "orange", "yellow")) + 
+  scale_fill_manual(name = "Wind speed (kts)", 
+                    values = c("red", "orange", "yellow"))
+print(sti)
+```
+
+```{r }
+ikestat <- stat_hurricane(data = Ike, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               color=wind_speed, fill=wind_speed))
+ggmap(neworleans) + (ikestat)
+
+ggmap(neworleans) + 
+  stat_hurricane(data = Ike, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               colour=wind_speed, fill=wind_speed)) + 
+  scale_color_manual(name = "Wind speed (kts)", 
+                     values = c("red", "orange", "yellow")) + 
+  scale_fill_manual(name = "Wind speed (kts)", 
+                    values = c("red", "orange", "yellow"))
+
+```
+
+```{r bash}
+st123Bash <- ggplot() +
+  stat_hurricane(data = ike1, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               colour=as.factor(wind_speed), fill=as.factor(wind_speed))) + 
+  stat_hurricane(data = ike2, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               colour=as.factor(wind_speed), fill=as.factor(wind_speed))) +
+  stat_hurricane(data = ike3, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               colour=as.factor(wind_speed), fill=as.factor(wind_speed)))
+stiBash <- ggplot() +
+  stat_hurricane(data = Ike, aes(x = longitude, y = latitude, r_ne=ne, r_nw=nw, r_se=se, r_sw=sw,
+                               colour=as.factor(wind_speed), fill=as.factor(wind_speed)))
+
+```
+
+```{r rds}
+xx <- readRDS("grid.rds")
+```
+
